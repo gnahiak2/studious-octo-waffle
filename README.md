@@ -2,6 +2,8 @@
 
 A friendly website that shows secondary school students how much CO2 their day made.
 
+<img width="517" height="810" alt="image" src="https://github.com/user-attachments/assets/1bca4466-d301-4b37-88c6-6b7dd3c3b43d" />
+
 ## Run it
 
 ```bash
