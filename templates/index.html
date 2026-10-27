@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2ecc71">
+<title>Green Footprints — how much CO2 did your day make?</title>
+<meta name="description" content="A friendly carbon footprint calculator for students.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<div class="phone">
+
+  <header class="hero">
+    <div class="badge" aria-hidden="true">🌍</div>
+    <h1>Green Footprints</h1>
+    <p>Find out how much CO<sub>2</sub> your day made!</p>
+    <div class="today">{{ today_label }}</div>
+  </header>
+
+  {% if errors %}
+  <div class="alert" role="alert">
+    <div class="alert-emoji" aria-hidden="true">🙈</div>
+    <div>
+      <strong>Almost there!</strong>
+      <ul>
+        {% for e in errors %}<li>{{ e.message }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <form id="footprint-form" method="post" action="{{ url_for('calculate') }}" novalidate>
+
+    <fieldset class="card">
+      <legend>How did you get to school? 🎒</legend>
+      <input type="hidden" name="mode" id="mode-input" value="{{ form.mode }}">
+      <div class="choices" role="radiogroup" aria-label="How did you get to school?">
+        {% for mode, emoji in [("Walk","🚶"),("Cycle","🚴"),("Bus","🚌"),("MRT","🚇"),("Car","🚗")] %}
+        <button type="button" class="choice {% if form.mode == mode %}is-active{% endif %}"
+                role="radio" aria-checked="{{ 'true' if form.mode == mode else 'false' }}"
+                data-mode="{{ mode }}">
+          <span class="choice-emoji" aria-hidden="true">{{ emoji }}</span>
+          <span>{{ mode }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <p class="field-error" data-error-for="mode"></p>
+    </fieldset>
+
+    <div class="card field {% if form_error_fields.distance_km %}is-invalid{% endif %}" data-field="distance_km">
+      <label for="distance_km">How far was your trip? <span class="unit">km</span> 📏</label>
+      <input id="distance_km" name="distance_km" type="text" inputmode="decimal"
+             autocomplete="off" placeholder="e.g. 5" value="{{ form.distance_km }}"
+             aria-describedby="distance_km-error">
+      <p class="field-error" id="distance_km-error" data-error-for="distance_km"></p>
+    </div>
+
+    <div class="card field {% if form_error_fields.aircon_hours %}is-invalid{% endif %}" data-field="aircon_hours">
+      <label for="aircon_hours">Hours of air-con at home <span class="unit">hours</span> ❄️</label>
+      <input id="aircon_hours" name="aircon_hours" type="text" inputmode="numeric"
+             autocomplete="off" placeholder="e.g. 4" value="{{ form.aircon_hours }}"
+             aria-describedby="aircon_hours-error">
+      <p class="field-error" id="aircon_hours-error" data-error-for="aircon_hours"></p>
+    </div>
+
+    <div class="card field {% if form_error_fields.meat_meals %}is-invalid{% endif %}" data-field="meat_meals">
+      <label for="meat_meals">Meat meals eaten today <span class="unit">meals</span> 🍗</label>
+      <input id="meat_meals" name="meat_meals" type="text" inputmode="numeric"
+             autocomplete="off" placeholder="e.g. 1" value="{{ form.meat_meals }}"
+             aria-describedby="meat_meals-error">
+      <p class="field-error" id="meat_meals-error" data-error-for="meat_meals"></p>
+    </div>
+
+    <input type="hidden" name="confirm_high" id="confirm-high" value="0">
+    <input type="checkbox" name="confirm_high" id="confirm-high-box" value="1" class="sr-only"
+           {% if confirmed %}checked{% endif %}>
+    <input type="hidden" name="mystery" id="mystery" value="{{ '1' if mystery else '0' }}">
+
+    <div class="actions">
+      <button type="submit" class="cta">Calculate my footprint</button>
+      <button type="button" class="cta-reset" id="reset-form">↺ Start again</button>
+    </div>
+    <p class="hint">Fill in your day, then tap the green button 👆</p>
+  </form>
+
+  {% if result %}
+  <section class="result-card level-{{ result.level }}" aria-live="polite">
+    <div class="level-tag">{{ result.level_label }}</div>
+    <div class="result-emoji" aria-hidden="true">{{ result.emoji }}</div>
+    <div class="result-number">{{ result.total }}</div>
+    <div class="result-unit">kg of CO<sub>2</sub> today</div>
+    <div class="result-headline">{{ result.headline }}</div>
+    <div class="result-message">{{ result.message }}</div>
+    {% if points %}
+    <div class="points-pill">+{{ points }} points <span>· {{ points_total }} total</span></div>
+    {% endif %}
+  </section>
+
+  <section class="tip-card">
+    <div class="tip-title">💡 Tip for tomorrow</div>
+    <div class="tip-body">{{ result.tip }}</div>
+  </section>
+
+  <section class="breakdown">
+    <h2>Where it came from</h2>
+    {% for part in result.parts %}
+    <div class="bar-row {% if part.name == result.biggest %}is-biggest{% endif %}">
+      <div class="bar-label">
+        <span>{{ part.name }}{% if part.name == result.biggest %} <span class="biggest-tag">biggest</span>{% endif %}</span>
+        <span>{{ part.kg }} kg</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill bar-{{ loop.index }}" style="width: {{ part.percent }}%"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if comparison %}
+  <section class="compare">
+    <h2>What if…?</h2>
+    <p class="compare-current">Today: <strong>{{ comparison.current }} kg</strong></p>
+    {% if comparison.options %}
+      {% for opt in comparison.options %}
+      <div class="compare-row">
+        <div class="compare-emoji" aria-hidden="true">{{ opt.emoji }}</div>
+        <div class="compare-text">
+          <div class="compare-label">{{ opt.label }}</div>
+          <div class="compare-detail">{{ opt.detail }}</div>
+        </div>
+        <div class="compare-save">
+          <strong>{{ opt.kg }} kg</strong>
+          {% if opt.saved > 0 %}<span class="save-tag">saves {{ opt.saved }} kg</span>{% else %}<span class="save-tag muted">no change</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="compare-none">Nothing to swap today — you're already travelling, cooling and eating lightly! 🎉</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if share %}
+  <section class="share">
+    <h2>Share your day</h2>
+    <canvas id="share-canvas" width="1080" height="1350" aria-label="Your shareable summary card"></canvas>
+    <div class="share-buttons">
+      <button type="button" class="btn-secondary" id="download-card">⬇️ Download card</button>
+      <button type="button" class="btn-secondary" id="copy-text">📋 Copy text</button>
+    </div>
+    <p class="share-status" id="share-status" role="status"></p>
+    <script type="application/json" id="share-data">{{ share|tojson }}</script>
+  </section>
+  {% endif %}
+  {% endif %}
+
+  {% if badges %}
+  <section class="badges">
+    <h2>Stickers you earned</h2>
+    <div class="badge-grid">
+      {% for b in badges %}
+      <div class="sticker">
+        <div class="sticker-emoji" aria-hidden="true">{{ b.emoji }}</div>
+        <div class="sticker-label">{{ b.label }}</div>
+        <div class="sticker-note">{{ b.note }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if week %}
+  <section class="week">
+    <div class="week-head">
+      <h2>Your week</h2>
+      {% if week.streak %}<div class="streak">🔥 {{ week.streak }}-day streak</div>{% endif %}
+    </div>
+
+    {% if week.has_data %}
+      <div class="chart" role="img" aria-label="Carbon footprint for the last seven days">
+        {% for day in week.days %}
+        <div class="chart-col">
+          <div class="chart-value">{{ day.kg if day.kg is not none else '' }}</div>
+          <div class="chart-track">
+            <div class="chart-bar {% if day.is_today %}is-today{% endif %} {% if day.kg is none %}is-empty{% endif %}"
+                 style="height: {{ day.percent }}%"></div>
+          </div>
+          <div class="chart-label {% if day.is_today %}is-today{% endif %}">{{ day.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="week-stats">
+        <div class="stat"><span class="stat-number">{{ week.average_kg }}</span><span class="stat-label">average kg/day</span></div>
+        <div class="stat"><span class="stat-number">{{ week.total_kg }}</span><span class="stat-label">total kg this week</span></div>
+        <div class="stat"><span class="stat-number">{{ week.logged_days }}/7</span><span class="stat-label">days logged</span></div>
+      </div>
+      <p class="week-note">
+        {% if week.best_day is not none %}Your lightest day was {{ week.best_day }} kg. {% endif %}
+        {% if week.streak >= 2 %}Keep the streak going — log again tomorrow!{% else %}Log tomorrow to start a streak. 🌱{% endif %}
+      </p>
+    {% else %}
+      <p class="week-note">No days saved yet — your first result will start the chart. 🌱</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <footer class="footer">
+    Rough estimates to help you learn — not exact science.<br>
+    Made for curious students 🌱
+  </footer>
+</div>
+
+<div class="modal" id="mystery-modal" {% if not mystery %}hidden{% endif %}>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="mystery-title">
+    <div class="modal-emoji" aria-hidden="true">🐱</div>
+    <h2 id="mystery-title">Do you really travel by Moshi?</h2>
+    <p class="modal-text" id="mystery-text">Moshi is a very heavy cat. A trip by Moshi would use a huge amount of CO<sub>2</sub>!</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="mystery-cancel">Let me pick a real way</button>
+      <button type="button" class="btn-warn" id="mystery-confirm">Yes, Moshi it is</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
